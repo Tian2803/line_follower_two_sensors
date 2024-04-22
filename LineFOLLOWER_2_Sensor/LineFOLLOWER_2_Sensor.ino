@@ -1,13 +1,18 @@
 #include <AFMotor.h>
-int pwm = 100;      //speed that the motor follows
-int vl = pwm + 20;   //acceleration
-int vh = pwm - 20;  //deceleration
 
 #define der A0
 #define izq A1
 
-AF_DCMotor motorL(2, MOTOR12_1KHZ);  //3
-AF_DCMotor motorD(4, MOTOR34_1KHZ);  //4
+AF_DCMotor motorL(2, MOTOR12_1KHZ);  // Motor izquierdo
+AF_DCMotor motorD(4, MOTOR34_1KHZ);  // Motor derecho
+
+int pwm = 100;  // Velocidad base de los motores
+double Kp = 1.0;  // Constante proporcional
+double Ki = 0.0;  // Constante integral
+double Kd = 0.0;  // Constante derivativa
+
+double integral = 0.0;
+double lastError = 0.0;
 
 void setup() {
   Serial.begin(9600);
@@ -19,46 +24,63 @@ void loop() {
   int left = digitalRead(izq);
   int right = digitalRead(der);
 
+  Serial.print("Izquierda: ");
+  Serial.println(left);
+  Serial.print("Derecha: ");
+  Serial.println(right);
+  
+
+  // Calcular error (diferencia entre las lecturas del sensor derecho e izquierdo)
+  double error = right - left;
+
+  // Calcular la señal de control usando PID
+  double correction = Kp * error + Ki * integral + Kd * (error - lastError);
+  
+  // Actualizar término integral
+  integral += error;
+
+  // Almacenar el error actual para la próxima iteración
+  lastError = error;
+
+  // Ajustar velocidades del motor en base a la corrección
+  int leftSpeed = pwm + correction;
+  int rightSpeed = pwm - correction;
+
+  // Asegurar que las velocidades del motor estén dentro del rango válido
+  leftSpeed = constrain(leftSpeed, 0, 255);
+  rightSpeed = constrain(rightSpeed, 0, 255);
+
+  // Mover el robot en base a las lecturas del sensor y la corrección PID
   if (left == 0 && right == 0) {
-    forward();
-  }
-
-  //line detected by right sensor
-  if (left == 0 && right == 1) {
-    //turn rigth
-    rigthG();
-  }
-  //line detected by left sensor
-  if (left == 1 && right == 0) {
-    //turn left
-    leftG();
-  }
-
-  if (left == 1 && right == 1) {
-    //Stop
+    forward(leftSpeed, rightSpeed);
+  } else if (left == 0 && right == 1) {
+    turnRight(leftSpeed, rightSpeed);
+  } else if (left == 1 && right == 0) {
+    turnLeft(leftSpeed, rightSpeed);
+  } else {
     stop();
   }
 }
 
-void forward() {
+void forward(int leftSpeed, int rightSpeed) {
   motorL.run(FORWARD);
-  motorL.setSpeed(pwm);
+  motorL.setSpeed(leftSpeed);
   motorD.run(FORWARD);
-  motorD.setSpeed(pwm);
+  motorD.setSpeed(rightSpeed);
 }
 
-void leftG() {
+void turnLeft(int leftSpeed, int rightSpeed) {
   motorL.run(BACKWARD);
-  motorL.setSpeed(vh);
+  motorL.setSpeed(leftSpeed);
   motorD.run(FORWARD);
-  motorD.setSpeed(vl);
+  motorD.setSpeed(rightSpeed);
 }
 
-void rigthG() {
+void turnRight(int leftSpeed, int rightSpeed) {
   motorL.run(FORWARD);
-  motorL.setSpeed(vl);
+  motorL.setSpeed(leftSpeed);
   motorD.run(BACKWARD);
-  motorD.setSpeed(vh);
+  motorD.setSpeed(rightSpeed);
 }
 
 void stop() {
